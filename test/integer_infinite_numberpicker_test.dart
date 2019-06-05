@@ -91,8 +91,8 @@ void main() {
 
 Future<NumberPicker> _testNumberPicker(
     {WidgetTester tester,
-    int minValue,
-    int maxValue,
+    double minValue,
+    double maxValue,
     int initialValue,
     int scrollBy,
     int step = 1,

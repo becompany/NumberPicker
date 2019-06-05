@@ -12,14 +12,14 @@ void main() {
         initialValue: 5.0,
         scrollByInt: 2,
         scrollByDecimal: 3,
-        expectedValue: 7.3);
+        expectedValue: 7.0);
   });
 }
 
 Future<NumberPicker> _testNumberPicker(
     {WidgetTester tester,
-    int minValue,
-    int maxValue,
+    double minValue,
+    double maxValue,
     double initialValue,
     int scrollByInt,
     int scrollByDecimal,

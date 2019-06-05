@@ -56,8 +56,8 @@ class _MyHomePageState extends State<MyHomePage> {
     );
     decimalNumberPicker = new NumberPicker.decimal(
       initialValue: _currentDoubleValue,
-      minValue: 1,
-      maxValue: 5,
+      minValue: 0.5,
+      maxValue: 5.5,
       decimalPlaces: 2,
       onChanged: (value) => setState(() => _currentDoubleValue = value),
     );
@@ -145,8 +145,8 @@ class _MyHomePageState extends State<MyHomePage> {
       context: context,
       builder: (BuildContext context) {
         return new NumberPickerDialog.decimal(
-          minValue: 1,
-          maxValue: 5,
+          minValue: 0.5,
+          maxValue: 5.5,
           decimalPlaces: 2,
           initialDoubleValue: _currentDoubleValue,
           title: new Text("Pick a decimal number"),
@@ -155,7 +155,7 @@ class _MyHomePageState extends State<MyHomePage> {
     ).then((num value) {
       if (value != null) {
         setState(() => _currentDoubleValue = value);
-        decimalNumberPicker.animateInt(value);
+        decimalNumberPicker.animateDecimalAndInteger(value);
       }
     });
   }

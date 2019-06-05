@@ -86,10 +86,10 @@ class NumberPicker extends StatelessWidget {
   final ValueChanged<num> onChanged;
 
   ///min value user can pick
-  final int minValue;
+  final double minValue;
 
   ///max value user can pick
-  final int maxValue;
+  final double maxValue;
 
   ///inidcates how many decimal places to show
   /// e.g. 0=>[1,2,3...], 1=>[1.0, 1.1, 1.2...]  2=>[1.00, 1.01, 1.02...]
@@ -129,12 +129,14 @@ class NumberPicker extends StatelessWidget {
   ///Amount of items
   final int integerItemCount;
 
+  final List<int> _decimalValues = new List();
+
   //
   //----------------------------- PUBLIC ------------------------------
   //
 
   animateInt(int valueToSelect) {
-    int diff = valueToSelect - minValue;
+    int diff = valueToSelect - minValue.floor();
     int index = diff ~/ step;
     animateIntToIndex(index);
   }
@@ -144,7 +146,8 @@ class NumberPicker extends StatelessWidget {
   }
 
   animateDecimal(int decimalValue) {
-    _animate(decimalScrollController, decimalValue * itemExtent);
+    _animate(decimalScrollController, _indexFromDecimalValue(decimalValue) *
+        itemExtent);
   }
 
   animateDecimalAndInteger(double valueToSelect) {
@@ -221,10 +224,7 @@ class NumberPicker extends StatelessWidget {
     TextStyle selectedStyle =
     themeData.textTheme.headline.copyWith(color: themeData.accentColor);
 
-    int decimalItemCount = selectedIntValue == maxValue
-        ? 3
-        : math.pow(10, decimalPlaces) + 2;
-
+    int decimalItemCount = _initDecimalValues(selectedIntValue.roundToDouble());
     return new NotificationListener(
       child: new Container(
         height: _listViewHeight,
@@ -234,11 +234,9 @@ class NumberPicker extends StatelessWidget {
           itemExtent: itemExtent,
           itemCount: decimalItemCount,
           itemBuilder: (BuildContext context, int index) {
-            final int value = index - 1;
-
             //define special style for selected (middle) element
             final TextStyle itemStyle =
-            value == selectedDecimalValue ? selectedStyle : defaultStyle;
+            _decimalValues[index] == selectedDecimalValue ? selectedStyle : defaultStyle;
 
             bool isExtra = index == 0 || index == decimalItemCount - 1;
 
@@ -246,7 +244,7 @@ class NumberPicker extends StatelessWidget {
                 ? new Container() //empty first and last element
                 : new Center(
               child: new Text(
-                  value.toString().padLeft(decimalPlaces, '0'),
+                  _decimalValues[index].toString().padLeft(decimalPlaces, '0'),
                   style: itemStyle),
             );
           },
@@ -254,6 +252,30 @@ class NumberPicker extends StatelessWidget {
       ),
       onNotification: _onDecimalNotification,
     );
+  }
+
+  int _initDecimalValues(double selectedValue) {
+    final selectedIntValue = selectedValue.floor();
+    int decimalItemCount;
+    bool reverse = false;
+    if(selectedIntValue == maxValue.floor()) {
+      decimalItemCount =
+          ((maxValue - maxValue.floor()) * math.pow(10, decimalPlaces)).floor()
+              + 3;
+    } else if(selectedIntValue == minValue.floor()) {
+      decimalItemCount =
+          ((minValue - minValue.floor()) * math.pow(10, decimalPlaces)).floor()
+              + 2;
+      reverse = true;
+    } else {
+      decimalItemCount = math.pow(10, decimalPlaces) + 2;
+    }
+    _decimalValues.length = decimalItemCount;
+    for (var i = 0; i < decimalItemCount; i++) {
+      _decimalValues[i] = reverse ? (math.pow(10,
+          decimalPlaces) - decimalItemCount + 1) + i : i - 1;
+    }
+    return decimalItemCount;
   }
 
   Widget _integerInfiniteListView(ThemeData themeData) {
@@ -292,7 +314,15 @@ class NumberPicker extends StatelessWidget {
   int _intValueFromIndex(int index) {
     index--;
     index %= integerItemCount;
-    return minValue + index * step;
+    return minValue.floor() + index * step;
+  }
+
+  int _decimalValueFromIndex(int index) {
+    return _decimalValues[index];
+  }
+
+  int _indexFromDecimalValue(int decimal) {
+    return _decimalValues.indexOf(decimal);
   }
 
   bool _onIntegerNotification(Notification notification) {
@@ -310,6 +340,9 @@ class NumberPicker extends StatelessWidget {
       if (_userStoppedScrolling(notification, intScrollController)) {
         //center selected value
         animateIntToIndex(intIndexOfMiddleElement);
+        if (decimalPlaces > 0) {
+          animateDecimal(selectedDecimalValue - 1);
+        }
       }
 
       //update selection
@@ -319,14 +352,17 @@ class NumberPicker extends StatelessWidget {
           //return integer value
           newValue = (intValueInTheMiddle);
         } else {
-          if (intValueInTheMiddle == maxValue) {
-            //if new value is maxValue, then return that value and ignore decimal
-            newValue = (intValueInTheMiddle.toDouble());
+          //return integer+decimal
+          double decimalPart = _toDecimal(selectedDecimalValue);
+          newValue = ((intValueInTheMiddle + decimalPart).toDouble());
+          if (newValue < minValue) {
+            _initDecimalValues(minValue);
             animateDecimal(0);
-          } else {
-            //return integer+decimal
-            double decimalPart = _toDecimal(selectedDecimalValue);
-            newValue = ((intValueInTheMiddle + decimalPart).toDouble());
+            newValue = minValue;
+          } else if (newValue > maxValue) {
+            _initDecimalValues(maxValue);
+            animateDecimal(((maxValue % 1) * math.pow(10, decimalPlaces)).floor());
+            newValue = maxValue;
           }
         }
         onChanged(newValue);
@@ -340,21 +376,27 @@ class NumberPicker extends StatelessWidget {
       //calculate middle value
       int indexOfMiddleElement =
           (notification.metrics.pixels + _listViewHeight / 2) ~/ itemExtent;
-      int decimalValueInTheMiddle = indexOfMiddleElement - 1;
-      decimalValueInTheMiddle =
-          _normalizeDecimalMiddleValue(decimalValueInTheMiddle);
 
-      if (_userStoppedScrolling(notification, decimalScrollController)) {
-        //center selected value
-        animateDecimal(decimalValueInTheMiddle);
-      }
+      // FIXME: Handle values out of range.
+      if (indexOfMiddleElement < _decimalValues.length) {
+        int decimalValueInTheMiddle = _decimalValueFromIndex(
+            indexOfMiddleElement);
+        decimalValueInTheMiddle =
+            _normalizeDecimalMiddleValue(decimalValueInTheMiddle);
 
-      //update selection
-      if (selectedIntValue != maxValue &&
-          decimalValueInTheMiddle != selectedDecimalValue) {
-        double decimalPart = _toDecimal(decimalValueInTheMiddle);
-        double newValue = ((selectedIntValue + decimalPart).toDouble());
-        onChanged(newValue);
+        if (_userStoppedScrolling(notification, decimalScrollController)) {
+          //center selected value
+          animateDecimal(decimalValueInTheMiddle - 1);
+          //update selection
+          if (selectedIntValue != maxValue &&
+              decimalValueInTheMiddle != selectedDecimalValue) {
+            double decimalPart = _toDecimal(decimalValueInTheMiddle);
+            double newValue = ((selectedIntValue + decimalPart).toDouble());
+            _initDecimalValues(newValue);
+            onChanged(newValue);
+          }
+        }
+
       }
     }
     return true;
@@ -381,7 +423,7 @@ class NumberPicker extends StatelessWidget {
   int _normalizeIntegerMiddleValue(int integerValueInTheMiddle) {
     //make sure that max is a multiple of step
     int max = (maxValue ~/ step) * step;
-    return _normalizeMiddleValue(integerValueInTheMiddle, minValue, max);
+    return _normalizeMiddleValue(integerValueInTheMiddle, minValue.floor(), max);
   }
 
   int _normalizeDecimalMiddleValue(int decimalValueInTheMiddle) {
@@ -414,8 +456,8 @@ class NumberPicker extends StatelessWidget {
 
 ///Returns AlertDialog as a Widget so it is designed to be used in showDialog method
 class NumberPickerDialog extends StatefulWidget {
-  final int minValue;
-  final int maxValue;
+  final double minValue;
+  final double maxValue;
   final int initialIntegerValue;
   final double initialDoubleValue;
   final int decimalPlaces;
